@@ -4,7 +4,7 @@
 #include <pthread.h>
 
 // Número de atendentes e tempo que a bilheteria ficará aberta
-#define NUM_ATENDENTES 2
+#define NUM_ATENDENTES 4
 
 // Cria tipos Assento e Cliente
 typedef struct Assento
@@ -20,7 +20,7 @@ typedef struct Cliente
 } Cliente;
 
 // Cria um cinema com 128 assentos.
-Assento cinema[3];
+Assento cinema[128];
 int num_assentos = sizeof(cinema) / sizeof(cinema[0]);
 
 // Cria uma fila vazia com capacidade para 64 pessoas.
@@ -34,11 +34,11 @@ pthread_mutex_t mutexFila;
 pthread_cond_t condFila;
 
 // Inicializa a thread atendente, mantém ela alerta para clientes na fila.
-void *inicializarAtendente(void *args) {}
+void *inicializarAtendente(void *args);
 
-void *gerarClientes(void *args) {}
+void *gerarClientes(void *args);
 
-void atenderCliente(Cliente *cliente) {}
+void atenderCliente(Cliente *cliente, int atendente_id);
 
 int main(int argc, char *argv[])
 {
@@ -58,7 +58,16 @@ int main(int argc, char *argv[])
 
   for (int i = 0; i < NUM_ATENDENTES; i++)
   {
-    pthread_create(&atendentes[i], NULL, inicializarAtendente, NULL);
+    usleep(10000);
+    int *id = malloc(sizeof(int)); // aloca memória separada
+    if (id == NULL)
+    {
+      perror("malloc");
+      exit(1);
+    }
+    *id = i + 1;
+
+    pthread_create(&atendentes[i], NULL, inicializarAtendente, id);
   }
 
   pthread_create(&geradorClientes, NULL, gerarClientes, &tempo_bilheteria);
@@ -79,8 +88,11 @@ int main(int argc, char *argv[])
 
 void *inicializarAtendente(void *args)
 {
+  int atendente_id = *(int *)args;
 
-  printf("=-=-=-=-=-=-= Atendente abriu a bilheteria! =-=-=-=-=-=-=\n");
+  free(args);
+
+  printf("=-=-=-=-=-=-= Atendente número %d abriu a bilheteria! =-=-=-=-=-=-=\n", atendente_id);
 
   while (1)
   {
@@ -94,8 +106,10 @@ void *inicializarAtendente(void *args)
       pthread_cond_wait(&condFila, &mutexFila);
     }
 
-    // Atende o primeiro cliente da fila
+    // Chama o primeiro cliente da fila
     cliente = fila[0];
+
+    // Faz a fila "andar"
     for (int i = 0; i < qntd_clientes_na_fila - 1; i++)
     {
       fila[i] = fila[i + 1];
@@ -103,7 +117,8 @@ void *inicializarAtendente(void *args)
     qntd_clientes_na_fila--;
     pthread_mutex_unlock(&mutexFila);
 
-    atenderCliente(&cliente);
+    // Atende o cliente
+    atenderCliente(&cliente, atendente_id);
   }
 
   return NULL;
@@ -133,22 +148,21 @@ void *gerarClientes(void *args)
     }
     pthread_mutex_unlock(&mutexFila);
 
-    sleep(1);
+    sleep(5);
   }
 
   return NULL;
 }
 
-void atenderCliente(Cliente *cliente)
+void atenderCliente(Cliente *cliente, int atendente_id)
 {
-  printf("Atendendo cliente %d...\n", cliente->id);
-  sleep(1);
+  printf("Atendente número %d atendendo cliente %d...\n", atendente_id, cliente->id);
+  sleep(5);
 
   // Tenta adquirir o mutex do assento desejado
   if (pthread_mutex_trylock(&cinema[cliente->assento_desejado].mutexAssento) == 0)
   {
     printf("[ASSENTO %d VENDIDO PARA O CLIENTE %d]\n", cliente->assento_desejado, cliente->id);
-    pthread_mutex_unlock(&cinema[cliente->assento_desejado].mutexAssento);
   }
   else
   {
