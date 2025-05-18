@@ -13,7 +13,6 @@ O usuário pode simular um número específico de clientes que entrarão na fila
 └── src
     ├── ticketSystem.c  Implantação geral do sistema
 ```
-&nbsp; &nbsp; &nbsp;
 
 ## Compilação e Execução
 
@@ -25,7 +24,6 @@ Execute o programa
 ```bash
 ./TicketSystem
 ```
-&nbsp; &nbsp; &nbsp;
 
 ## Funcionalidades
 O sistema conta com as seguintes funcionalidades
@@ -37,8 +35,6 @@ O sistema conta com as seguintes funcionalidades
 - `Múltiplos atendentes para processamento simultâneo de clientes.`
 
 - `Entrada manual de clientes via terminal. ("add <Número de Clientes>}")`
-
-&nbsp; &nbsp; &nbsp;
 
 ## Exemplo de Caso de Uso
 
