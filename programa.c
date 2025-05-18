@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <string.h>
 
 // Número de atendentes e tempo que a bilheteria ficará aberta
 #define NUM_ATENDENTES 4
@@ -40,11 +41,14 @@ void *gerarClientes(void *args);
 
 void atenderCliente(Cliente *cliente, int atendente_id);
 
+void *entradaUsuario(void *args);
+
 int main(int argc, char *argv[])
 {
   srand(time(NULL));
   pthread_t atendentes[NUM_ATENDENTES];
   pthread_t geradorClientes;
+  pthread_t threadEntrada;
   int tempo_bilheteria = 20;
 
   pthread_mutex_init(&mutexFila, NULL);
@@ -70,9 +74,11 @@ int main(int argc, char *argv[])
     pthread_create(&atendentes[i], NULL, inicializarAtendente, id);
   }
 
+  pthread_create(&threadEntrada, NULL, entradaUsuario, NULL);
   pthread_create(&geradorClientes, NULL, gerarClientes, &tempo_bilheteria);
 
   pthread_join(geradorClientes, NULL);
+  pthread_join(threadEntrada, NULL);
 
   for (int i = 0; i < NUM_ATENDENTES; i++)
   {
@@ -168,4 +174,69 @@ void atenderCliente(Cliente *cliente, int atendente_id)
   {
     printf("[O ASSENTO %d JÁ ESTÁ OCUPADO]\nO Cliente %d não conseguiu reservar e meteu o pé.\n", cliente->assento_desejado, cliente->id);
   }
+}
+
+void *entradaUsuario(void *args)
+{
+  char buffer[128];
+  int id_cliente_manual = 10000; // IDs manuais começam em 10000 para não conflitar
+
+  while (1)
+  {
+    printf("Digite comando (ex: add 15):\n");
+    if (fgets(buffer, sizeof(buffer), stdin) != NULL)
+    {
+      // Remove o '\n' do final
+      buffer[strcspn(buffer, "\n")] = 0;
+
+      // Pega o comando (primeira palavra)
+      char *comando = strtok(buffer, " ");
+      if (comando != NULL && strcmp(comando, "add") == 0)
+      {
+        char *quant_str = strtok(NULL, " ");
+        if (quant_str != NULL)
+        {
+          int quantidade = atoi(quant_str);
+          if (quantidade > 0)
+          {
+            pthread_mutex_lock(&mutexFila);
+            int adicionados = 0;
+            for (int i = 0; i < quantidade; i++)
+            {
+              if (qntd_clientes_na_fila >= 64)
+              {
+                printf("Fila cheia! Foram adicionados %d clientes até agora.\n", adicionados);
+                break;
+              }
+              Cliente novo_cliente;
+              novo_cliente.id = id_cliente_manual++;
+              novo_cliente.assento_desejado = rand() % num_assentos;
+
+              fila[qntd_clientes_na_fila++] = novo_cliente;
+              adicionados++;
+            }
+            if (adicionados > 0)
+            {
+              printf("Adicionados %d clientes na fila.\n", adicionados);
+              pthread_cond_signal(&condFila); // acorda atendente se estiver esperando
+            }
+            pthread_mutex_unlock(&mutexFila);
+          }
+          else
+          {
+            printf("Quantidade inválida.\n");
+          }
+        }
+        else
+        {
+          printf("Use: add <quantidade>\n");
+        }
+      }
+      else
+      {
+        printf("Comando inválido. Use: add <quantidade>\n");
+      }
+    }
+  }
+  return NULL;
 }
