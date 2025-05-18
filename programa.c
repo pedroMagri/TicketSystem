@@ -98,7 +98,7 @@ void *inicializarAtendente(void *args)
 
   free(args);
 
-  printf("=-=-=-=-=-=-= Atendente número %d abriu a bilheteria! =-=-=-=-=-=-=\n", atendente_id);
+  printf("\n=-=-=-=-=-=-= Atendente número %d abriu a bilheteria! =-=-=-=-=-=-=\n", atendente_id);
 
   while (1)
   {
@@ -108,7 +108,7 @@ void *inicializarAtendente(void *args)
     pthread_mutex_lock(&mutexFila);
     while (qntd_clientes_na_fila == 0)
     {
-      printf("\n=-=-=-=-=-=-=-=-= [AGUARDANDO CLIENTES] =-=-=-=-=-=-=-=-=\n");
+      printf("\n=-=-=-=-=-=-=-=-= [ATENDENTE %d AGUARDANDO CLIENTES] =-=-=-=-=-=-=-=-=\n", atendente_id);
       pthread_cond_wait(&condFila, &mutexFila);
     }
 
@@ -134,27 +134,29 @@ void *gerarClientes(void *args)
 {
   int tempo_bilheteria = *(int *)args;
   int id_cliente = 1;
+  unsigned int seed = time(NULL) ^ pthread_self();
 
   while (tempo_bilheteria--)
   {
     Cliente novo_cliente;
     novo_cliente.id = id_cliente++;
-    novo_cliente.assento_desejado = rand() % num_assentos;
+    novo_cliente.assento_desejado = rand_r(&seed) % num_assentos;
 
     pthread_mutex_lock(&mutexFila);
     if (qntd_clientes_na_fila < 64)
     {
       fila[qntd_clientes_na_fila++] = novo_cliente;
-      printf("Cliente %d entrou na fila e deseja o assento %d\n", novo_cliente.id, novo_cliente.assento_desejado);
+      printf("\nCliente %d entrou na fila e deseja o assento %d\n", novo_cliente.id, novo_cliente.assento_desejado);
       pthread_cond_signal(&condFila);
     }
     else
     {
-      printf("Fila cheia! O cliente %d não conseguiu entrar. \n", novo_cliente.id);
+      printf("\nFila cheia! O cliente %d não conseguiu entrar. \n", novo_cliente.id);
     }
     pthread_mutex_unlock(&mutexFila);
 
-    sleep(5);
+    int tempo_aleatorio = (rand_r(&seed) % 5) + 1;
+    sleep(tempo_aleatorio);
   }
 
   return NULL;
@@ -162,17 +164,17 @@ void *gerarClientes(void *args)
 
 void atenderCliente(Cliente *cliente, int atendente_id)
 {
-  printf("Atendente número %d atendendo cliente %d...\n", atendente_id, cliente->id);
+  printf("\nAtendente número %d atendendo cliente %d...\n", atendente_id, cliente->id);
   sleep(5);
 
   // Tenta adquirir o mutex do assento desejado
   if (pthread_mutex_trylock(&cinema[cliente->assento_desejado].mutexAssento) == 0)
   {
-    printf("[ASSENTO %d VENDIDO PARA O CLIENTE %d]\n", cliente->assento_desejado, cliente->id);
+    printf("\n[ASSENTO %d VENDIDO PARA O CLIENTE %d]\n", cliente->assento_desejado, cliente->id);
   }
   else
   {
-    printf("[O ASSENTO %d JÁ ESTÁ OCUPADO]\nO Cliente %d não conseguiu reservar e meteu o pé.\n", cliente->assento_desejado, cliente->id);
+    printf("\n[O ASSENTO %d JÁ ESTÁ OCUPADO]\nO Cliente %d não conseguiu reservar e meteu o pé.\n", cliente->assento_desejado, cliente->id);
   }
 }
 
@@ -183,7 +185,7 @@ void *entradaUsuario(void *args)
 
   while (1)
   {
-    printf("Digite comando (ex: add 15):\n");
+    printf("Digite comando (ex: add 15):\n\n\n\n\n\n");
     if (fgets(buffer, sizeof(buffer), stdin) != NULL)
     {
       // Remove o '\n' do final
@@ -205,7 +207,7 @@ void *entradaUsuario(void *args)
             {
               if (qntd_clientes_na_fila >= 64)
               {
-                printf("Fila cheia! Foram adicionados %d clientes até agora.\n", adicionados);
+                printf("\nFila cheia! Foram adicionados %d clientes até agora.\n", adicionados);
                 break;
               }
               Cliente novo_cliente;
@@ -217,24 +219,24 @@ void *entradaUsuario(void *args)
             }
             if (adicionados > 0)
             {
-              printf("Adicionados %d clientes na fila.\n", adicionados);
+              printf("\nAdicionados %d clientes na fila.\n", adicionados);
               pthread_cond_signal(&condFila); // acorda atendente se estiver esperando
             }
             pthread_mutex_unlock(&mutexFila);
           }
           else
           {
-            printf("Quantidade inválida.\n");
+            printf("\nQuantidade inválida.\n");
           }
         }
         else
         {
-          printf("Use: add <quantidade>\n");
+          printf("\nUse: add <quantidade>\n");
         }
       }
       else
       {
-        printf("Comando inválido. Use: add <quantidade>\n");
+        printf("\nComando inválido. Use: add <quantidade>\n");
       }
     }
   }
