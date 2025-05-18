@@ -1,0 +1,244 @@
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <string.h>
+
+// Número de atendentes e tempo que a bilheteria ficará aberta
+#define NUM_ATENDENTES 4
+
+// Cria tipos Assento e Cliente
+typedef struct Assento
+{
+  int id;
+  pthread_mutex_t mutexAssento;
+} Assento;
+
+typedef struct Cliente
+{
+  int id;
+  int assento_desejado;
+} Cliente;
+
+// Cria um cinema com 128 assentos.
+Assento cinema[128];
+int num_assentos = sizeof(cinema) / sizeof(cinema[0]);
+
+// Cria uma fila vazia com capacidade para 64 pessoas.
+Cliente fila[64];
+int qntd_clientes_na_fila = 0;
+
+// Mutex para garantir que só UMA thread atendente chame o primeiro cliente da fila.
+pthread_mutex_t mutexFila;
+
+// Variável de condição para que os atendentes esperem se a fila estiver vazia.
+pthread_cond_t condFila;
+
+// Inicializa a thread atendente, mantém ela alerta para clientes na fila.
+void *inicializarAtendente(void *args);
+
+void *gerarClientes(void *args);
+
+void atenderCliente(Cliente *cliente, int atendente_id);
+
+void *entradaUsuario(void *args);
+
+int main(int argc, char *argv[])
+{
+  srand(time(NULL));
+  pthread_t atendentes[NUM_ATENDENTES];
+  pthread_t geradorClientes;
+  pthread_t threadEntrada;
+  int tempo_bilheteria = 20;
+
+  pthread_mutex_init(&mutexFila, NULL);
+  pthread_cond_init(&condFila, NULL);
+
+  for (int i = 0; i < num_assentos; i++)
+  {
+    cinema[i].id = i;
+    pthread_mutex_init(&cinema[i].mutexAssento, NULL);
+  }
+
+  for (int i = 0; i < NUM_ATENDENTES; i++)
+  {
+    usleep(10000);
+    int *id = malloc(sizeof(int)); // aloca memória separada
+    if (id == NULL)
+    {
+      perror("malloc");
+      exit(1);
+    }
+    *id = i + 1;
+
+    pthread_create(&atendentes[i], NULL, inicializarAtendente, id);
+  }
+
+  pthread_create(&threadEntrada, NULL, entradaUsuario, NULL);
+  pthread_create(&geradorClientes, NULL, gerarClientes, &tempo_bilheteria);
+
+  pthread_join(geradorClientes, NULL);
+  pthread_join(threadEntrada, NULL);
+
+  for (int i = 0; i < NUM_ATENDENTES; i++)
+  {
+    pthread_cancel(atendentes[i]);
+    pthread_join(atendentes[i], NULL);
+  }
+
+  pthread_mutex_destroy(&mutexFila);
+  pthread_cond_destroy(&condFila);
+
+  return 0;
+}
+
+void *inicializarAtendente(void *args)
+{
+  int atendente_id = *(int *)args;
+
+  free(args);
+
+  printf("\n=-=-=-=-=-=-= Atendente número %d abriu a bilheteria! =-=-=-=-=-=-=\n", atendente_id);
+
+  while (1)
+  {
+
+    Cliente cliente;
+
+    pthread_mutex_lock(&mutexFila);
+    while (qntd_clientes_na_fila == 0)
+    {
+      printf("\n=-=-=-=-=-=-=-=-= [ATENDENTE %d AGUARDANDO CLIENTES] =-=-=-=-=-=-=-=-=\n", atendente_id);
+      pthread_cond_wait(&condFila, &mutexFila);
+    }
+
+    // Chama o primeiro cliente da fila
+    cliente = fila[0];
+
+    // Faz a fila "andar"
+    for (int i = 0; i < qntd_clientes_na_fila - 1; i++)
+    {
+      fila[i] = fila[i + 1];
+    }
+    qntd_clientes_na_fila--;
+    pthread_mutex_unlock(&mutexFila);
+
+    // Atende o cliente
+    atenderCliente(&cliente, atendente_id);
+  }
+
+  return NULL;
+}
+
+void *gerarClientes(void *args)
+{
+  int tempo_bilheteria = *(int *)args;
+  int id_cliente = 1;
+  unsigned int seed = time(NULL) ^ pthread_self();
+
+  while (tempo_bilheteria--)
+  {
+    Cliente novo_cliente;
+    novo_cliente.id = id_cliente++;
+    novo_cliente.assento_desejado = rand_r(&seed) % num_assentos;
+
+    pthread_mutex_lock(&mutexFila);
+    if (qntd_clientes_na_fila < 64)
+    {
+      fila[qntd_clientes_na_fila++] = novo_cliente;
+      printf("\nCliente %d entrou na fila e deseja o assento %d\n", novo_cliente.id, novo_cliente.assento_desejado);
+      pthread_cond_signal(&condFila);
+    }
+    else
+    {
+      printf("\nFila cheia! O cliente %d não conseguiu entrar. \n", novo_cliente.id);
+    }
+    pthread_mutex_unlock(&mutexFila);
+
+    int tempo_aleatorio = (rand_r(&seed) % 5) + 1;
+    sleep(tempo_aleatorio);
+  }
+
+  return NULL;
+}
+
+void atenderCliente(Cliente *cliente, int atendente_id)
+{
+  printf("\nAtendente número %d atendendo cliente %d...\n", atendente_id, cliente->id);
+  sleep(5);
+
+  // Tenta adquirir o mutex do assento desejado
+  if (pthread_mutex_trylock(&cinema[cliente->assento_desejado].mutexAssento) == 0)
+  {
+    printf("\n[ASSENTO %d VENDIDO PARA O CLIENTE %d]\n", cliente->assento_desejado, cliente->id);
+  }
+  else
+  {
+    printf("\n[O ASSENTO %d JÁ ESTÁ OCUPADO]\nO Cliente %d não conseguiu reservar e meteu o pé.\n", cliente->assento_desejado, cliente->id);
+  }
+}
+
+void *entradaUsuario(void *args)
+{
+  char buffer[128];
+  int id_cliente_manual = 10000; // IDs manuais começam em 10000 para não conflitar
+
+  while (1)
+  {
+    printf("Digite comando (ex: add 15):\n\n\n\n\n\n");
+    if (fgets(buffer, sizeof(buffer), stdin) != NULL)
+    {
+      // Remove o '\n' do final
+      buffer[strcspn(buffer, "\n")] = 0;
+
+      // Pega o comando (primeira palavra)
+      char *comando = strtok(buffer, " ");
+      if (comando != NULL && strcmp(comando, "add") == 0)
+      {
+        char *quant_str = strtok(NULL, " ");
+        if (quant_str != NULL)
+        {
+          int quantidade = atoi(quant_str);
+          if (quantidade > 0)
+          {
+            pthread_mutex_lock(&mutexFila);
+            int adicionados = 0;
+            for (int i = 0; i < quantidade; i++)
+            {
+              if (qntd_clientes_na_fila >= 64)
+              {
+                printf("\nFila cheia! Foram adicionados %d clientes até agora.\n", adicionados);
+                break;
+              }
+              Cliente novo_cliente;
+              novo_cliente.id = id_cliente_manual++;
+              novo_cliente.assento_desejado = rand() % num_assentos;
+
+              fila[qntd_clientes_na_fila++] = novo_cliente;
+              adicionados++;
+            }
+            if (adicionados > 0)
+            {
+              printf("\nAdicionados %d clientes na fila.\n", adicionados);
+              pthread_cond_signal(&condFila); // acorda atendente se estiver esperando
+            }
+            pthread_mutex_unlock(&mutexFila);
+          }
+          else
+          {
+            printf("\nQuantidade inválida.\n");
+          }
+        }
+        else
+        {
+          printf("\nUse: add <quantidade>\n");
+        }
+      }
+      else
+      {
+        printf("\nComando inválido. Use: add <quantidade>\n");
+      }
+    }
+  }
+  return NULL;
+}
