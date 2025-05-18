@@ -10,8 +10,17 @@ O usuário pode simular um número específico de clientes que entrarão na fila
 ```
 ├── Makefile
 ├── README.md
+├── includes
+|   ├── atendimento.h   Declaração das funções usadas pelas threads Atendentes
+|   ├── entrada.h       Definição da função de tratamento de entrada do Usuário
+|   ├── gerador.h       Declaração da função utilizada pela thread geradora de Clientes
+|   └── sistema.h       Declaração de estruturas de dados, variáveis globais e funções do sistema
 └── src
-    ├── ticketSystem.c  Implantação geral do sistema
+    ├── main.c          Função principal de execução do programa
+    ├── atendimento.c   Implantação das funções usadas pelas threads Atendentes
+    ├── entrada.c       Implantação da função de tratamento de entrada do Usuário
+    ├── gerador.c       Implatançaão da função utilizada pela thread geradora de Clientes
+    └── sistema.c       Implantação das funções de controle de execução do sistema
 ```
 
 ## Compilação e Execução
@@ -22,7 +31,7 @@ make
 ```
 Execute o programa
 ```bash
-./TicketSystem
+./main
 ```
 
 ## Funcionalidades
@@ -41,7 +50,7 @@ O sistema conta com as seguintes funcionalidades
 Inicie o programa:
 
 ```bash
-./TicketSystem
+./main
 ```
 
 Aguarde a inicialização dos atendentes e a geração automática de clientes.
